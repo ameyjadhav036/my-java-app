@@ -1,65 +1,26 @@
+
 trigger:
-  - main
+  - main  # or your default branch
 
 pool:
   vmImage: 'ubuntu-latest'
 
-stages:
-  - stage: Build
-    jobs:
-      - job: BuildJob
-        steps:
-          - task: Maven@3
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'package'
-              publishJUnitResults: true
-              testResultsFiles: '**/TEST-*.xml'
+steps:
+  - task: Maven@3
+    inputs:
+      mavenPomFile: 'pom.xml'
+      goals: 'clean package'
+      javaHomeOption: 'JDKVersion'
+      jdkVersionOption: '1.21'
+      publishJUnitResults: true
+      testResultsFiles: '**/TEST-*.xml'
 
-          - task: PublishBuildArtifacts@1
-            inputs:
-              pathToPublish: 'target'
-              artifactName: 'jar-artifact'
+  - task: CopyFiles@2
+    inputs:
+      contents: '**/target/*.jar'
+      targetFolder: '$(Build.ArtifactStagingDirectory)'
 
-  - stage: DeployToDev
-    dependsOn: Build
-    jobs:
-      - job: DevDeployJob
-        steps:
-          - task: DownloadBuildArtifacts@0
-            inputs:
-              buildType: 'current'
-              downloadType: 'single'
-              artifactName: 'jar-artifact'
-              downloadPath: '$(Pipeline.Workspace)'
-
-          - task: CopyFilesOverSSH@0
-            inputs:
-              sshEndpoint: 'dev-vm-ssh'
-              sourceFolder: '$(Pipeline.Workspace)/jar-artifact'
-              contents: '**/*.jar'
-              targetFolder: '/home/azureuser/app'
-
-          - task: SSH@0
-            inputs:
-              sshEndpoint: 'dev-vm-ssh'
-              runOptions: 'inline'
-              inline: 'java -jar /home/azureuser/app/my-java-app-1.0-SNAPSHOT.jar'
-
-  - stage: DeployToTest
-    dependsOn: DeployToDev
-    jobs:
-      - job: TestDeployJob
-        steps:
-          - task: CopyFilesOverSSH@0
-            inputs:
-              sshEndpoint: 'test-vm-ssh'
-              sourceFolder: '$(Pipeline.Workspace)/jar-artifact'
-              contents: '**/*.jar'
-              targetFolder: '/home/azureuser/app'
-
-          - task: SSH@0
-            inputs:
-              sshEndpoint: 'test-vm-ssh'
-              runOptions: 'inline'
-              inline: 'java -jar /home/azureuser/app/my-java-app-1.0-SNAPSHOT.jar'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathToPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: 'drop'
